@@ -1,0 +1,13 @@
+[Unit]
+Description=EtR Flask Service
+After=network-online.target
+
+[Service]
+User=oryx
+WorkingDirectory=/home/oryx/EtR-core
+Environment="PYTHONUNBUFFERED=1"
+ExecStart=/home/oryx/EtR-core/.venv/bin/python -m flask --app src/app.py run --host=0.0.0.0 --port=8080
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
