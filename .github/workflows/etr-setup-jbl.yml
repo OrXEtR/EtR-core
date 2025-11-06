@@ -1,0 +1,81 @@
+name: etr-setup-jbl
+on:
+  workflow_dispatch:
+
+jobs:
+  setup:
+    runs-on: self-hosted
+    steps:
+      - name: Prépare env user (oryx)
+        run: |
+          id
+          sudo loginctl enable-linger oryx || true
+          # Démarre/active PipeWire côté user
+          sudo -u oryx XDG_RUNTIME_DIR=/run/user/1000 systemctl --user enable --now pipewire pipewire-pulse wireplumber || true
+
+      - name: Installer script d’autoconnect JBL
+        run: |
+          cat <<'SH' | sudo tee /usr/local/bin/jbl-connect.sh >/dev/null
+          #!/usr/bin/env bash
+          set -euo pipefail
+          MAC="40:C1:F6:70:C0:1A"
+          export XDG_RUNTIME_DIR="/run/user/1000"
+          export PULSE_SERVER="unix:${XDG_RUNTIME_DIR}/pulse/native"
+
+          # Allume BT et connecte
+          bluetoothctl --timeout 20 <<BT
+          power on
+          trust $MAC
+          connect $MAC
+          BT
+
+          # Attends que le sink apparaisse (max 60s)
+          MAC_U=$(echo "$MAC" | tr ':' '_')
+          for i in $(seq 1 60); do
+            if pactl list short sinks 2>/dev/null | grep -qi "bluez_output\.${MAC_U}"; then
+              SINK=$(pactl list short sinks | awk -v m="$MAC_U" 'tolower($0) ~ tolower("bluez_output." m) {print $2; exit}')
+              pactl set-default-sink "$SINK"
+              # petit son de test (non bloquant)
+              paplay /usr/share/sounds/alsa/Front_Center.wav || true
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "[JBL] Sink BlueZ introuvable après 60s." >&2
+          exit 1
+          SH
+          sudo chmod +x /usr/local/bin/jbl-connect.sh
+
+      - name: Créer service systemd (user) pour autoconnect
+        run: |
+          sudo -u oryx mkdir -p /home/oryx/.config/systemd/user
+          cat <<'UNIT' | sudo -u oryx tee /home/oryx/.config/systemd/user/jbl-autoconnect.service >/dev/null
+          [Unit]
+          Description=Auto-connect JBL (user)
+          After=bluetooth.service
+          Wants=bluetooth.service
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/local/bin/jbl-connect.sh
+          RemainAfterExit=yes
+
+          [Install]
+          WantedBy=default.target
+          UNIT
+
+      - name: Activer service user et lancer un test immédiat
+        run: |
+          sudo -u oryx XDG_RUNTIME_DIR=/run/user/1000 systemctl --user daemon-reload
+          sudo -u oryx XDG_RUNTIME_DIR=/run/user/1000 systemctl --user enable --now jbl-autoconnect.service
+          # Relance le script une fois pour vérifier
+          /usr/local/bin/jbl-connect.sh || true
+
+      - name: Afficher sinks pour contrôle
+        run: |
+          export XDG_RUNTIME_DIR=/run/user/1000
+          export PULSE_SERVER="unix:${XDG_RUNTIME_DIR}/pulse/native"
+          echo "=== SINKS ==="
+          pactl list short sinks || true
+          echo "=== DEFAULT ==="
+          pactl info | grep "Default Sink" || true
