@@ -1,0 +1,35 @@
+name: etr-remote-cmd
+on:
+  workflow_dispatch:
+
+jobs:
+  cmd:
+    runs-on: self-hosted
+    steps:
+      - name: Contexte hôte
+        run: |
+          echo "=== Identité ==="
+          hostnamectl || true
+          echo
+          echo "=== Kernel ==="
+          uname -a || true
+          echo
+          echo "=== Utilisateur ==="
+          whoami || true
+          id || true
+
+      - name: Vérif audio (PipeWire/Pulse)
+        run: |
+          export XDG_RUNTIME_DIR=/run/user/1000
+          export PULSE_SERVER="unix:${XDG_RUNTIME_DIR}/pulse/native"
+          echo "=== CARTES ==="
+          pactl list short cards || true
+          echo
+          echo "=== SINKS ==="
+          pactl list short sinks || true
+
+      - name: Test son (facultatif, ne bloque pas)
+        run: |
+          export XDG_RUNTIME_DIR=/run/user/1000
+          export PULSE_SERVER="unix:${XDG_RUNTIME_DIR}/pulse/native"
+          paplay /usr/share/sounds/alsa/Front_Center.wav || true
