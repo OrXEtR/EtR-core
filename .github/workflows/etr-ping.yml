@@ -1,0 +1,24 @@
+name: etr-ping
+on:
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: self-hosted
+    steps:
+      - name: Infos système
+        run: |
+          echo "Runner = $RUNNER_NAME ($RUNNER_OS/$RUNNER_ARCH)"
+          uname -a
+          whoami
+          hostnamectl || true
+
+      - name: Vérif PipeWire/Pulse (user oryx)
+        run: |
+          UID_ORYX=$(id -u oryx)
+          sudo -u oryx XDG_RUNTIME_DIR=/run/user/$UID_ORYX pactl list short sinks || true
+          sudo -u oryx XDG_RUNTIME_DIR=/run/user/$UID_ORYX pactl info || true
+
+      - name: Vérif Bluetooth (JBL)
+        run: |
+          bluetoothctl info 40:C1:F6:70:C0:1A || true
