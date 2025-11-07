@@ -1,0 +1,58 @@
+name: Debug JBL
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    runs-on: [self-hosted, Linux, ARM64]
+
+    steps:
+      - name: Préparer l'environnement (XDG_RUNTIME_DIR)
+        run: |
+          echo "XDG_RUNTIME_DIR=/run/user/1000" >> $GITHUB_ENV
+
+      - name: Qui suis-je / noyau
+        run: |
+          whoami
+          uname -a
+
+      - name: Afficher l'état du service (user)
+        env:
+          XDG_RUNTIME_DIR: ${{ env.XDG_RUNTIME_DIR }}
+        run: |
+          systemctl --user status jbl-autoconnect.service || true
+
+      - name: Derniers logs systemd (user)
+        env:
+          XDG_RUNTIME_DIR: ${{ env.XDG_RUNTIME_DIR }}
+        run: |
+          journalctl --user -u jbl-autoconnect -b --no-pager | tail -n 200 || true
+
+      - name: Vérifier le script et ses 1ères lignes
+        run: |
+          sudo stat -c '%A %U:%G %s  %n' /usr/local/bin/jbl-connect.sh || true
+          sudo head -n 5 /usr/local/bin/jbl-connect.sh || true
+          sudo od -An -t x1 -N 3 /usr/local/bin/jbl-connect.sh || true
+
+      - name: Lister cartes/sorties PipeWire
+        env:
+          XDG_RUNTIME_DIR: ${{ env.XDG_RUNTIME_DIR }}
+        run: |
+          pactl list short cards || true
+          pactl list short sinks || true
+          pactl info || true
+
+      - name: Relancer le service (user)
+        env:
+          XDG_RUNTIME_DIR: ${{ env.XDG_RUNTIME_DIR }}
+        run: |
+          systemctl --user restart jbl-autoconnect.service || true
+          sleep 3
+          systemctl --user status jbl-autoconnect.service || true
+
+      - name: Test audio (optionnel)
+        env:
+          XDG_RUNTIME_DIR: ${{ env.XDG_RUNTIME_DIR }}
+        run: |
+          paplay /usr/share/sounds/alsa/Front_Center.wav || true
