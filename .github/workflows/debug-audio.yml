@@ -1,0 +1,77 @@
+name: Debug Audio / Bluetooth
+
+on:
+  workflow_dispatch: {}   # lancement manuel
+  schedule:
+    - cron: "0 * * * *"   # (optionnel) toutes les heures
+
+jobs:
+  diag:
+    runs-on: self-hosted
+    steps:
+      - name: Checkout (optionnel)
+        uses: actions/checkout@v4
+
+      - name: Contexte runner
+        run: |
+          echo "Hostname: $(hostname)"
+          echo "User: $(whoami)"
+          echo "Date: $(date)"
+          uname -a
+          echo "-------------- ENV --------------"
+          env | sort || true
+
+      - name: Bluetooth - état noyau / service
+        run: |
+          echo "===== dmesg bluetooth ====="
+          dmesg | grep -i bluetooth | tail -n 200 || true
+          echo "===== rfkill ====="
+          rfkill list || true
+          echo "===== systemctl bluetooth ====="
+          systemctl status bluetooth --no-pager || true
+          echo "===== bluetoothctl devices ====="
+          bluetoothctl devices || true
+          echo "===== Paired-devices ====="
+          bluetoothctl paired-devices || true
+
+      - name: Audio PipeWire/Pulse (user oryx)
+        run: |
+          UID=1000
+          export XDG_RUNTIME_DIR=/run/user/$UID
+          export PULSE_SERVER=unix:/run/user/$UID/pulse/native
+          echo "===== services user ====="
+          sudo -u oryx XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR systemctl --user status pipewire pipewire-pulse wireplumber --no-pager || true
+          echo "===== pactl cards ====="
+          sudo -u oryx XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR pactl list short cards || true
+          echo "===== pactl sinks ====="
+          sudo -u oryx XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR pactl list short sinks || true
+          echo "===== pactl info ====="
+          sudo -u oryx XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR pactl info || true
+
+      - name: Journal JBL (user service)
+        run: |
+          UID=1000
+          export XDG_RUNTIME_DIR=/run/user/$UID
+          echo "===== journalctl --user jbl-autoconnect ====="
+          sudo -u oryx XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR journalctl --user -u jbl-autoconnect -b --no-pager || true
+
+      - name: Récup logs dans des fichiers
+        run: |
+          mkdir -p diag
+          dmesg | tail -n 500 > diag/dmesg_tail.txt || true
+          journalctl -u bluetooth -b --no-pager > diag/journal_bluetooth.txt || true
+          systemctl status bluetooth --no-pager > diag/status_bluetooth.txt || true
+          UID=1000
+          XDG_RUNTIME_DIR=/run/user/$UID
+          sudo -u oryx XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR pactl list short cards > diag/pactl_cards.txt || true
+          sudo -u oryx XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR pactl list short sinks > diag/pactl_sinks.txt || true
+          sudo -u oryx XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR pactl info > diag/pactl_info.txt || true
+          sudo -u oryx XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR journalctl --user -u jbl-autoconnect -b --no-pager > diag/jbl_autoconnect_journal.txt || true
+          bluetoothctl devices > diag/bt_devices.txt || true
+          bluetoothctl paired-devices > diag/bt_paired.txt || true
+
+      - name: Upload artefacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: diag-audio-bluetooth
+          path: diag/
