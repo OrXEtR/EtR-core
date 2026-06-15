@@ -1,0 +1,38 @@
+name: Deploy Apps Script - WhatsApp Webhook
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps-script/whatsapp-webhook/**'
+      - '.github/workflows/apps-script-whatsapp-webhook-deploy.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install clasp
+        working-directory: apps-script/whatsapp-webhook
+        run: npm install
+
+      - name: Setup clasp credentials
+        run: |
+          echo '${{ secrets.CLASPRC_JSON }}' > ~/.clasprc.json
+          echo '${{ secrets.CLASP_JSON }}' > .clasp.json
+
+      - name: Push Apps Script code
+        run: npx @google/clasp push --force
+
+      - name: Create Apps Script version
+        run: npx @google/clasp version "GitHub ${{ github.sha }}"
