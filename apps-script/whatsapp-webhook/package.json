@@ -1,0 +1,13 @@
+{
+  "name": "etr-whatsapp-webhook-apps-script",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Projet EtR / ORYX - Apps Script webhook for WhatsApp Cloud API",
+  "scripts": {
+    "deploy": "clasp push --force && clasp version \"github-actions\"",
+    "status": "clasp status"
+  },
+  "devDependencies": {
+    "@google/clasp": "latest"
+  }
+}
